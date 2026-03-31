@@ -1,75 +1,114 @@
-# Multi-Tenant SaaS Backend
+# Notification System (Multi-Channel)
 
 ## Overview
 
-This project is a multi-tenant SaaS backend built with AdonisJS and TypeScript.  
-It provides a structured and scalable foundation for applications that require tenant isolation, secure authentication, and API-based integrations.
+This project is a scalable notification system built with AdonisJS and TypeScript.  
+It is designed to deliver messages across multiple channels, including email, SMS, and push notifications.
 
-The system is designed to support multiple organizations within a single application while ensuring strict data separation and controlled access.
+The system supports asynchronous processing, retry mechanisms, and extensibility for adding new delivery channels.
 
 ---
 
 ## Architecture
 
-The application follows a layered architecture to enforce separation of concerns and maintain scalability:
+The application follows a modular and layered architecture with asynchronous processing:
 
-Controller → Service → Model (ORM) → Database
+Controller → Service → Queue → Worker → Provider → External Service
 
 ### Layers
 
 **Controllers**
-- Handle HTTP requests and responses
-- Perform input validation
-- Delegate business logic to services
+- Accept notification requests
+- Validate payloads
+- Forward requests to services
 
 **Services**
-- Encapsulate business rules
-- Coordinate workflows (authentication, tenant creation, API key management)
-- Remain independent of HTTP layer
+- Orchestrate notification creation
+- Determine delivery channels
+- Dispatch jobs to the queue
 
-**Models (Lucid ORM)**
-- Represent database entities
-- Handle persistence and querying
+**Queue (BullMQ / Redis)**
+- Handles asynchronous processing
+- Enables retries and delayed jobs
+- Decouples request lifecycle from delivery
 
-**Middleware**
-- Responsible for cross-cutting concerns:
-  - JWT authentication
-  - API key validation
-  - Tenant context resolution
+**Workers**
+- Consume jobs from the queue
+- Execute delivery logic per channel
 
----
-
-## Multi-Tenancy Strategy
-
-The system uses a shared database with tenant scoping:
-
-- Each entity is associated with a `tenant_id`
-- All queries are scoped to the current tenant
-- Prevents cross-tenant data leakage
-
-This approach balances simplicity and scalability, making it suitable for most SaaS applications.
+**Providers**
+- Abstract external services (Email, SMS, Push)
+- Allow easy swapping of vendors
 
 ---
 
-## Authentication and Security
+## Notification Flow
 
-- JWT-based authentication for users
-- Secure password hashing
-- Middleware-based access control
-- API key mechanism for external integrations
+### High-Level Workflow
+
+Client  
+↓  
+Controller  
+↓  
+Notification Service  
+↓  
+Queue (Redis)  
+↓  
+Worker  
+↓  
+Provider (Email / SMS / Push)  
+↓  
+External API  
 
 ---
 
-## API Key System
+## Multi-Channel Delivery
 
-- Tenants can generate API keys
-- Keys are passed via `x-api-key` header
-- Each key is linked to a tenant
-- Supports revocation
+The system supports multiple notification channels:
 
-Future extensions:
-- Scoped permissions
-- Expiration policies
+- Email (SMTP or third-party providers)
+- SMS (external gateways)
+- Push notifications (Firebase or similar)
+
+Each notification can be sent through one or more channels simultaneously.
+
+---
+
+## Queue Processing
+
+- Uses Redis-based queue (BullMQ)
+- Supports:
+  - Retries with backoff
+  - Delayed delivery
+  - Failure handling
+  - Dead-letter strategies (future)
+
+---
+
+## Retry Strategy
+
+- Automatic retries on failure
+- Configurable retry attempts per channel
+- Exponential backoff support
+
+---
+
+## Data Model
+
+Core entities:
+
+- **Notification**
+  - id
+  - user_id
+  - message
+  - status
+  - created_at
+
+- **NotificationLog**
+  - channel (email, sms, push)
+  - status (sent, failed)
+  - provider response
+  - timestamp
 
 ---
 
@@ -77,96 +116,81 @@ Future extensions:
 
 - Backend: AdonisJS
 - Language: TypeScript
-- ORM: Lucid
-- Database: SQLite (development), PostgreSQL (production)
-- Authentication: JWT
+- Queue: BullMQ (Redis)
+- Database: PostgreSQL / SQLite
+- Providers:
+  - Email: SMTP / SendGrid
+  - SMS: Twilio
+  - Push: Firebase Cloud Messaging
 
 ---
 
 ## Request Workflow
 
-### User Authentication Flow
+### Notification Creation
 
 Client  
 ↓  
-Auth Controller  
+Controller  
 ↓  
-Auth Service  
+Notification Service  
 ↓  
-User Model  
+Persist Notification  
 ↓  
-Database  
-↓  
-JWT Token Response  
+Dispatch Jobs to Queue  
 
 ---
 
-### Authenticated Request Flow
+### Worker Processing
 
-Client  
+Queue Job  
 ↓  
-JWT Middleware  
+Worker  
 ↓  
-Controller  
+Channel चयन (email/sms/push)  
 ↓  
-Service  
+Provider Execution  
 ↓  
-Model  
-↓  
-Database  
-
----
-
-### API Key Request Flow
-
-Client (x-api-key)  
-↓  
-API Key Middleware  
-↓  
-Tenant Resolution  
-↓  
-Controller  
-↓  
-Service  
-↓  
-Model  
-↓  
-Database  
+Update Status / Logs  
 
 ---
 
 ## Core Features
 
-- User registration and login
-- Tenant creation and isolation
-- API key generation and validation
-- Middleware-based request protection
+- Multi-channel notification delivery
+- Asynchronous processing via queue
+- Retry and failure handling
+- Provider abstraction layer
+- Delivery logging and tracking
 
 ---
 
 ## Design Principles
 
-- Clear separation of concerns
-- Stateless authentication
-- Explicit tenant scoping
-- Extensible service layer
-- Minimal coupling between components
+- Decoupled architecture
+- Asynchronous-first processing
+- Provider abstraction
+- Idempotent job handling
+- Scalable and fault-tolerant design
 
 ---
 
 ## Future Improvements
 
-- Role-Based Access Control (RBAC)
-- Rate limiting per tenant
-- API key scopes and permissions
-- Audit logging
-- Background job processing (queues)
+- Notification templates
+- User preferences (opt-in/out per channel)
+- Rate limiting per user
+- Scheduling (cron-based notifications)
+- Webhook callbacks for delivery status
+- Dashboard for monitoring
 
 ---
 
 ## What This Project Demonstrates
 
-- Multi-tenant architecture in a real-world scenario
-- Secure authentication and authorization patterns
-- Scalable backend design with TypeScript
-- Structured and maintainable code organization
+- Event-driven architecture
+- Queue-based processing with retries
+- Integration with external services
+- Scalable notification delivery system
+- Clean separation of infrastructure and business logic
+- 
